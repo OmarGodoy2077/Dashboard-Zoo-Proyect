@@ -1,0 +1,25 @@
+{
+  "testEnvironment": "node",
+  "testMatch": [
+    "**/tests/**/*.test.js"
+  ],
+  "collectCoverageFrom": [
+    "**/*.js",
+    "!**/node_modules/**",
+    "!**/tests/**",
+    "!**/coverage/**",
+    "!jest.config.js",
+    "!install.js"
+  ],
+  "coverageDirectory": "coverage",
+  "coverageReporters": [
+    "text",
+    "lcov",
+    "html"
+  ],
+  "setupFiles": [
+    "<rootDir>/tests/setup.js"
+  ],
+  "testTimeout": 30000,
+  "verbose": true
+}

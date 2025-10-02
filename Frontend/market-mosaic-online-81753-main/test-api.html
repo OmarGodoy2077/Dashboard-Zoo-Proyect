@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Entradas y Empleados</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test API - Entradas y Empleados</h1>
+    
+    <div class="container">
+        <h2>Configuración</h2>
+        <div>
+            <label>API Base URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:3000">
+        </div>
+        <div>
+            <label>Token JWT:</label>
+            <input type="text" id="token" placeholder="Ingresa tu token JWT">
+            <button onclick="getTokenFromLocalStorage()">Obtener de LocalStorage</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Tests de Entradas</h2>
+        <button onclick="testEntradas()">🎫 Test GET /api/entradas</button>
+        <button onclick="testEntradasEstadisticas()">📊 Test GET /api/entradas/estadisticas</button>
+        <div id="entradasResult" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>Tests de Empleados</h2>
+        <button onclick="testEmpleados()">👥 Test GET /api/empleados</button>
+        <div id="empleadosResult" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>Test de Conexión</h2>
+        <button onclick="testHealth()">💚 Test GET /health</button>
+        <div id="healthResult" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        function getTokenFromLocalStorage() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                document.getElementById('token').value = token;
+                showResult('healthResult', `Token obtenido: ${token.substring(0, 50)}...`, 'success');
+            } else {
+                showResult('healthResult', 'No hay token en localStorage', 'error');
+            }
+        }
+
+        function showResult(elementId, message, type = '') {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.textContent = message;
+            element.className = 'result ' + type;
+        }
+
+        async function testHealth() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            console.log('Testing health endpoint...');
+            
+            try {
+                const response = await fetch(`${apiUrl}/health`);
+                const data = await response.json();
+                showResult('healthResult', JSON.stringify(data, null, 2), 'success');
+                console.log('Health check success:', data);
+            } catch (error) {
+                showResult('healthResult', `Error: ${error.message}\n\nStack: ${error.stack}`, 'error');
+                console.error('Health check error:', error);
+            }
+        }
+
+        async function testEntradas() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const token = document.getElementById('token').value;
+            
+            console.log('Testing entradas endpoint...');
+            console.log('API URL:', apiUrl);
+            console.log('Token:', token ? 'Present' : 'Missing');
+            
+            if (!token) {
+                showResult('entradasResult', 'Por favor ingresa un token JWT', 'error');
+                return;
+            }
+
+            try {
+                console.log('Making fetch request...');
+                const response = await fetch(`${apiUrl}/api/entradas`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                console.log('Response received:', response.status, response.ok);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Data received:', data);
+                showResult('entradasResult', JSON.stringify(data, null, 2), 'success');
+            } catch (error) {
+                console.error('Error completo:', error);
+                showResult('entradasResult', `Error: ${error.message}\n\nType: ${error.constructor.name}\n\nStack: ${error.stack}`, 'error');
+            }
+        }
+
+        async function testEntradasEstadisticas() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const token = document.getElementById('token').value;
+            
+            console.log('Testing entradas/estadisticas endpoint...');
+            
+            if (!token) {
+                showResult('entradasResult', 'Por favor ingresa un token JWT', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}/api/entradas/estadisticas`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Response received:', response.status);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Estadísticas received:', data);
+                showResult('entradasResult', JSON.stringify(data, null, 2), 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                showResult('entradasResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testEmpleados() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const token = document.getElementById('token').value;
+            
+            console.log('Testing empleados endpoint...');
+            
+            if (!token) {
+                showResult('empleadosResult', 'Por favor ingresa un token JWT', 'error');
+                return;
+            }
+
+            try {
+                console.log('Making fetch request to empleados...');
+                const response = await fetch(`${apiUrl}/api/empleados`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                console.log('Response received:', response.status, response.ok);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Empleados data received:', data);
+                showResult('empleadosResult', JSON.stringify(data, null, 2), 'success');
+            } catch (error) {
+                console.error('Error completo:', error);
+                showResult('empleadosResult', `Error: ${error.message}\n\nType: ${error.constructor.name}\n\nStack: ${error.stack}`, 'error');
+            }
+        }
+
+        // Auto-cargar token al iniciar
+        window.addEventListener('load', () => {
+            getTokenFromLocalStorage();
+        });
+    </script>
+</body>
+</html>
