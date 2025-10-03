@@ -66,7 +66,7 @@ app.use(generalLimiter);
 
 // Configuración CORS más detallada
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173', 'http://localhost:8080','https://dashboard-zoo-proyect-production.up.railway.app'],
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173', 'http://localhost:8080','https://dashboard-zoo-proyect-production.up.railway.app','http://dashboard-zoo-proyect-copy-production.up.railway.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control'],
   credentials: true,
