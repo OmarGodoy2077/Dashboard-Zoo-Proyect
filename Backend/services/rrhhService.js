@@ -2,6 +2,60 @@ const { supabase } = require('../config/database');
 const { logger } = require('../middleware/logger');
 const { validateVacacionesData, validateInasistenciasData, validateDescuentosData, validateBonosData } = require('../utils/validation');
 
+// Función helper para obtener fecha local en formato YYYY-MM-DD (zona horaria de Guatemala GMT-6)
+const getLocalDate = () => {
+  const now = new Date();
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Función helper para verificar solapamiento de vacaciones
+const verificarSolapamientoVacaciones = async (empleadoId, fechaInicio, fechaFin, excludeId = null) => {
+  try {
+    let query = supabase
+      .from('vacaciones')
+      .select('id, fecha_inicio, fecha_fin')
+      .eq('empleado_id', empleadoId)
+      .in('estado', ['aprobada', 'solicitada']);
+
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+
+    const { data: vacacionesExistentes, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    // Comparar fechas como strings YYYY-MM-DD para evitar problemas de zona horaria
+    const nuevaInicio = fechaInicio;
+    const nuevaFin = fechaFin;
+
+    // Verificar solapamiento con vacaciones existentes
+    for (const vacacion of vacacionesExistentes) {
+      const existenteInicio = vacacion.fecha_inicio;
+      const existenteFin = vacacion.fecha_fin;
+
+      // Verificar si hay solapamiento comparando strings
+      if (nuevaInicio <= existenteFin && nuevaFin >= existenteInicio) {
+        return true; // Hay solapamiento
+      }
+    }
+
+    return false; // No hay solapamiento
+  } catch (error) {
+    logger.error('Error verificando solapamiento de vacaciones', { empleadoId, fechaInicio, fechaFin, error: error.message });
+    throw error;
+  }
+};
+
 // Servicios para vacaciones
 const getAllVacaciones = async (filters = {}) => {
   try {
@@ -139,6 +193,19 @@ const createVacacion = async (vacacionData) => {
     // Validar datos de entrada
     const validatedData = validateVacacionesData(vacacionData);
 
+    // Verificar solapamiento de vacaciones para el mismo empleado
+    if (validatedData.estado === 'aprobada' || validatedData.estado === 'solicitada') {
+      const solapamiento = await verificarSolapamientoVacaciones(
+        validatedData.empleado_id,
+        validatedData.fecha_inicio,
+        validatedData.fecha_fin
+      );
+
+      if (solapamiento) {
+        throw new Error('El empleado ya tiene vacaciones programadas en este período');
+      }
+    }
+
     const { data, error } = await supabase
       .from('vacaciones')
       .insert([{
@@ -156,6 +223,29 @@ const createVacacion = async (vacacionData) => {
       throw error;
     }
 
+    // Si se crea una vacación ya aprobada y estamos en el período, actualizar estado del empleado
+    if (validatedData.estado === 'aprobada') {
+      const hoy = new Date();
+      const fechaInicio = new Date(validatedData.fecha_inicio);
+      const fechaFin = new Date(validatedData.fecha_fin);
+
+      if (hoy >= fechaInicio && hoy <= fechaFin) {
+        await supabase
+          .from('empleados')
+          .update({ estado: 'vacaciones', fecha_actualizacion: new Date().toISOString() })
+          .eq('id', validatedData.empleado_id);
+        logger.info('Empleado actualizado inmediatamente a estado "vacaciones" al crear vacación aprobada', {
+          empleadoId: validatedData.empleado_id,
+          vacacionId: data.id
+        });
+      }
+    }
+
+    // Si se creó aprobada, actualizar estados de todos los empleados para asegurar consistencia
+    if (validatedData.estado === 'aprobada') {
+      await actualizarEstadoEmpleadosVacaciones();
+    }
+
     logger.info('Vacación creada exitosamente', { vacacionId: data.id, empleadoId: data.empleado_id });
     return data;
   } catch (error) {
@@ -168,6 +258,37 @@ const updateVacacion = async (id, vacacionData) => {
  try {
     // Validar datos de entrada
     const validatedData = validateVacacionesData(vacacionData, true);
+
+    // Obtener la vacación actual antes de actualizar
+    const { data: vacacionActual, error: getError } = await supabase
+      .from('vacaciones')
+      .select('estado, empleado_id, fecha_inicio, fecha_fin')
+      .eq('id', id)
+      .single();
+
+    if (getError) {
+      throw getError;
+    }
+
+    // Verificar solapamiento si se están cambiando las fechas y el estado es aprobado o solicitado
+    if ((validatedData.fecha_inicio !== undefined || validatedData.fecha_fin !== undefined) &&
+        (vacacionActual.estado === 'aprobada' || vacacionActual.estado === 'solicitada' ||
+         validatedData.estado === 'aprobada' || validatedData.estado === 'solicitada')) {
+
+      const nuevaFechaInicio = validatedData.fecha_inicio || vacacionActual.fecha_inicio;
+      const nuevaFechaFin = validatedData.fecha_fin || vacacionActual.fecha_fin;
+
+      const solapamiento = await verificarSolapamientoVacaciones(
+        vacacionActual.empleado_id,
+        nuevaFechaInicio,
+        nuevaFechaFin,
+        id // Excluir la vacación actual de la verificación
+      );
+
+      if (solapamiento) {
+        throw new Error('El empleado ya tiene vacaciones programadas en este período');
+      }
+    }
 
     const updateData = {};
     if (validatedData.fecha_inicio !== undefined) updateData.fecha_inicio = validatedData.fecha_inicio;
@@ -186,6 +307,56 @@ const updateVacacion = async (id, vacacionData) => {
 
     if (error) {
       throw error;
+    }
+
+    // Lógica para actualizar el estado del empleado basado en el estado de la vacación
+    const nuevoEstado = validatedData.estado !== undefined ? validatedData.estado : vacacionActual.estado;
+    const empleadoId = vacacionActual.empleado_id;
+
+    if (nuevoEstado === 'aprobada' && vacacionActual.estado !== 'aprobada') {
+      // Si se aprueba la vacación, verificar si estamos en el período de vacaciones
+      const hoy = getLocalDate(); // Usar fecha local
+      const fechaInicio = data.fecha_inicio;
+      const fechaFin = data.fecha_fin;
+
+      if (hoy >= fechaInicio && hoy <= fechaFin) {
+        // Estamos en período de vacaciones, cambiar estado del empleado
+        const { error: updateEmpleadoError } = await supabase
+          .from('empleados')
+          .update({ estado: 'vacaciones', fecha_actualizacion: new Date().toISOString() })
+          .eq('id', empleadoId);
+
+        if (updateEmpleadoError) {
+          logger.error('Error actualizando empleado a vacaciones', {
+            empleadoId,
+            vacacionId: id,
+            error: updateEmpleadoError.message
+          });
+        } else {
+          logger.info('Empleado actualizado inmediatamente a estado "vacaciones"', { empleadoId, vacacionId: id });
+        }
+      }
+    } else if ((nuevoEstado === 'cancelada' || nuevoEstado === 'rechazada') && vacacionActual.estado === 'aprobada') {
+      // Si se cancela o rechaza una vacación aprobada, restaurar estado del empleado a activo
+      const { error: updateEmpleadoError } = await supabase
+        .from('empleados')
+        .update({ estado: 'activo', fecha_actualizacion: new Date().toISOString() })
+        .eq('id', empleadoId);
+
+      if (updateEmpleadoError) {
+        logger.error('Error restaurando empleado a activo', {
+          empleadoId,
+          vacacionId: id,
+          error: updateEmpleadoError.message
+        });
+      } else {
+        logger.info('Empleado restaurado inmediatamente a estado "activo"', { empleadoId, vacacionId: id });
+      }
+    }
+
+    // Si se cambió a aprobada, actualizar estados de todos los empleados
+    if (nuevoEstado === 'aprobada' && vacacionActual.estado !== 'aprobada') {
+      await actualizarEstadoEmpleadosVacaciones();
     }
 
     logger.info('Vacación actualizada exitosamente', { vacacionId: id, changes: vacacionData });
@@ -730,6 +901,88 @@ const getPlanillaMensual = async (mes, anio, filters = {}) => {
   }
 };
 
+// Servicio para actualizar automáticamente el estado de empleados basado en vacaciones activas
+const actualizarEstadoEmpleadosVacaciones = async () => {
+  try {
+    logger.info('Iniciando actualización automática de estado de empleados por vacaciones');
+
+    const hoy = getLocalDate(); // Usar fecha local
+    const hoyString = hoy; // Ya está en formato YYYY-MM-DD
+
+    // Obtener todas las vacaciones aprobadas
+    const { data: vacacionesAprobadas, error: vacacionesError } = await supabase
+      .from('vacaciones')
+      .select('id, empleado_id, fecha_inicio, fecha_fin')
+      .eq('estado', 'aprobada');
+
+    if (vacacionesError) {
+      throw vacacionesError;
+    }
+
+    logger.info(`Encontradas ${vacacionesAprobadas.length} vacaciones aprobadas`);
+
+    // Procesar cada vacación
+    for (const vacacion of vacacionesAprobadas) {
+      // Verificar si hoy está dentro del período de vacaciones usando comparación de strings
+      const estaEnVacaciones = hoyString >= vacacion.fecha_inicio && hoyString <= vacacion.fecha_fin;
+
+      if (estaEnVacaciones) {
+        // El empleado debería estar en estado "vacaciones"
+        const { error: updateError } = await supabase
+          .from('empleados')
+          .update({ estado: 'vacaciones', fecha_actualizacion: new Date().toISOString() })
+          .eq('id', vacacion.empleado_id);
+
+        if (updateError) {
+          logger.error('Error actualizando empleado a vacaciones', {
+            empleadoId: vacacion.empleado_id,
+            vacacionId: vacacion.id,
+            error: updateError.message
+          });
+        } else {
+          logger.info('Empleado actualizado a estado "vacaciones"', {
+            empleadoId: vacacion.empleado_id,
+            vacacionId: vacacion.id
+          });
+        }
+      } else if (hoyString < vacacion.fecha_inicio) {
+        // Las vacaciones aún no han comenzado - no hacer nada
+        logger.info('Vacaciones aún no iniciadas', {
+          empleadoId: vacacion.empleado_id,
+          vacacionId: vacacion.id,
+          fechaInicio: vacacion.fecha_inicio
+        });
+      } else {
+        // El período de vacaciones terminó, restaurar a "activo"
+        const { error: updateError } = await supabase
+          .from('empleados')
+          .update({ estado: 'activo', fecha_actualizacion: new Date().toISOString() })
+          .eq('id', vacacion.empleado_id);
+
+        if (updateError) {
+          logger.error('Error restaurando empleado a activo', {
+            empleadoId: vacacion.empleado_id,
+            vacacionId: vacacion.id,
+            error: updateError.message
+          });
+        } else {
+          logger.info('Empleado restaurado a estado "activo"', {
+            empleadoId: vacacion.empleado_id,
+            vacacionId: vacacion.id
+          });
+        }
+      }
+    }
+
+    logger.info('Actualización automática de estado de empleados completada');
+    return { success: true, procesadas: vacacionesAprobadas.length };
+
+  } catch (error) {
+    logger.error('Error en actualizarEstadoEmpleadosVacaciones', { error: error.message });
+    throw error;
+  }
+};
+
 // Servicio para generar reporte de planilla en Excel
 const generatePlanillaExcel = async (mes, anio) => {
   try {
@@ -804,5 +1057,8 @@ module.exports = {
   
   // Servicios para planilla
   getPlanillaMensual,
-  generatePlanillaExcel
+  generatePlanillaExcel,
+  
+  // Servicio para actualizar estado de empleados por vacaciones
+  actualizarEstadoEmpleadosVacaciones
 };

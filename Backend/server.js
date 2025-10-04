@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const dotenv = require('dotenv');
+const cron = require('node-cron');
 
 // Cargar variables de entorno
 dotenv.config();
@@ -18,6 +19,7 @@ const { validateContentType, bodyParserErrorHandler, logRequestBody } = require(
 // Importar servicios
 const { testConnection } = require('./config/database');
 const websocketService = require('./services/websocketService');
+const rrhhService = require('./services/rrhhService');
 
 // Importar rutas
 const authRoutes = require('./routes/auth.routes');
@@ -214,6 +216,17 @@ const startServer = () => {
     logger.info(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
     logger.info(`📈 Status Monitor: http://localhost:${PORT}/status`);
     logger.info(`🔌 WebSocket habilitado para tiempo real`);
+  });
+
+  // Programar actualización diaria de estado de empleados por vacaciones a las 6:00 AM
+  cron.schedule('0 6 * * *', async () => {
+    try {
+      logger.info('⏰ Iniciando actualización automática diaria de estado de empleados por vacaciones');
+      const resultado = await rrhhService.actualizarEstadoEmpleadosVacaciones();
+      logger.info('✅ Actualización automática completada', resultado);
+    } catch (error) {
+      logger.error('❌ Error en actualización automática de estado de empleados por vacaciones', error);
+    }
   });
 
   // Manejo graceful de cierre del servidor

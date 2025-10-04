@@ -522,6 +522,26 @@ const exportPlanillaExcel = async (req, res) => {
   }
 };
 
+// Controlador para actualizar estado de empleados por vacaciones
+const actualizarEstadoEmpleadosVacaciones = async (req, res) => {
+  try {
+    const resultado = await rrhhService.actualizarEstadoEmpleadosVacaciones();
+
+    res.status(200).json({
+      success: true,
+      data: resultado,
+      message: 'Estado de empleados actualizado exitosamente'
+    });
+  } catch (error) {
+    logger.error('Error en actualizarEstadoEmpleadosVacaciones', { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar estado de empleados',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
 // Controladores para vacaciones
   getAllVacaciones,
@@ -553,5 +573,8 @@ module.exports = {
   
   // Controladores para planilla
   getPlanillaMensual,
-  exportPlanillaExcel
+  exportPlanillaExcel,
+  
+  // Controlador para actualizar estado de empleados por vacaciones
+  actualizarEstadoEmpleadosVacaciones
 };

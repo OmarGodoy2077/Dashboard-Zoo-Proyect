@@ -49,7 +49,7 @@ export default function Entradas() {
     tipo_ticket: 'Adulto',
     precio_unitario: 15.00,
     cantidad: 1,
-    fecha_venta: new Date().toISOString().split('T')[0], // CORREGIDO: formato YYYY-MM-DD sin problemas de zona horaria
+    fecha_venta: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
     metodo_pago: 'efectivo'
   });
 
@@ -413,7 +413,7 @@ export default function Entradas() {
       tipo_ticket: 'Adulto',
       precio_unitario: 15.00,
       cantidad: 1,
-      fecha_venta: new Date().toISOString().split('T')[0], // CORREGIDO: formato YYYY-MM-DD sin problemas de zona horaria
+      fecha_venta: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
       metodo_pago: 'efectivo'
     });
   };

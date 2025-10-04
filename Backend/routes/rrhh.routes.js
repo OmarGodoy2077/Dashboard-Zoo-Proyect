@@ -38,4 +38,7 @@ router.get('/planilla/:mes/:anio', auth, rrhhController.getPlanillaMensual);
 // Ruta para exportar planilla mensual a Excel
 router.get('/planilla/:mes/:anio/excel', auth, rrhhController.exportPlanillaExcel);
 
+// Ruta para actualizar estado de empleados por vacaciones
+router.post('/actualizar-estado-vacaciones', auth, authorize('admin'), rrhhController.actualizarEstadoEmpleadosVacaciones);
+
 module.exports = router;

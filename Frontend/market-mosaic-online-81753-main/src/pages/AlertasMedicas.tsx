@@ -20,6 +20,7 @@ interface Animal {
   especie: string;
   estado_salud: string;
   habitat?: string;
+  fecha_registro?: string;
   edad?: number;
   fecha_ingreso?: string;
 }
@@ -35,7 +36,10 @@ interface Tratamiento {
   fecha_inicio: string;
   fecha_fin: string;
   estado: string;
-  veterinario?: string;
+  veterinario?: {
+    id: number;
+    nombre: string;
+  };
   notas?: string;
   animal?: Animal;
 }
@@ -58,10 +62,10 @@ export default function AlertasMedicas() {
     medicamento: '',
     dosis: '',
     frecuencia: '',
-    fecha_inicio: new Date().toISOString().split('T')[0],
+    fecha_inicio: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
     fecha_fin: '',
     estado: 'activo',
-    veterinario: '',
+    veterinario_id: '',
     notas: ''
   });
 
@@ -149,11 +153,9 @@ export default function AlertasMedicas() {
         const dataTratamientos = await responseTratamientos.json();
         setTratamientosActivos(Array.isArray(dataTratamientos.data) ? dataTratamientos.data : (Array.isArray(dataTratamientos) ? dataTratamientos : []));
       } else {
-  // ...existing code...
+        console.warn('Error al cargar tratamientos activos');
         setTratamientosActivos([]);
-      }
-
-    } catch (error) {
+      }    } catch (error) {
       console.error('Error:', error);
       toast({
         variant: "destructive",
@@ -257,7 +259,7 @@ export default function AlertasMedicas() {
       fecha_inicio: tratamiento.fecha_inicio,
       fecha_fin: tratamiento.fecha_fin,
       estado: tratamiento.estado,
-      veterinario: tratamiento.veterinario || '',
+      veterinario_id: tratamiento.veterinario?.id.toString() || '',
       notas: tratamiento.notas || ''
     });
     setOpenDialog(true);
@@ -272,10 +274,10 @@ export default function AlertasMedicas() {
       medicamento: '',
       dosis: '',
       frecuencia: '',
-      fecha_inicio: new Date().toISOString().split('T')[0],
+      fecha_inicio: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
       fecha_fin: '',
       estado: 'activo',
-      veterinario: '',
+      veterinario_id: '',
       notas: ''
     });
   };
@@ -478,17 +480,17 @@ export default function AlertasMedicas() {
                     </div>
 
                     <div className="grid gap-2">
-                      <Label htmlFor="veterinario">Veterinario</Label>
+                      <Label htmlFor="veterinario_id">Veterinario</Label>
                       <Select 
-                        value={formData.veterinario} 
-                        onValueChange={(value) => setFormData({ ...formData, veterinario: value })}
+                        value={formData.veterinario_id} 
+                        onValueChange={(value) => setFormData({ ...formData, veterinario_id: value })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccionar veterinario" />
                         </SelectTrigger>
                         <SelectContent>
                           {veterinarios.map((vet) => (
-                            <SelectItem key={vet.id} value={vet.nombre}>
+                            <SelectItem key={vet.id} value={vet.id.toString()}>
                               {vet.nombre}
                             </SelectItem>
                           ))}

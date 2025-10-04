@@ -154,7 +154,9 @@ const getDashboardData = async (req, res, next) => {
     const frontendStats = {
       totalAnimales: stats.animales?.total || 0,
       totalEmpleados: stats.empleados?.total || 0,
+      empleadosActivos: stats.empleados?.activos || 0, // Agregar empleados activos
       visitantesHoy: stats.visitantes?.hoy || 0,
+      visitantesAyer: stats.visitantes?.ayer || 0,
       alertasMedicas: stats.animales?.enfermos || 0,
       totalAlimentos: stats.alimentos?.total || 0,
       tareasLimpiezaActivas: stats.limpiezas?.activas || 0

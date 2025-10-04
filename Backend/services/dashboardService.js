@@ -1,31 +1,56 @@
 const { supabase } = require('../config/database');
 const { logger } = require('../middleware/logger');
 
-// Función helper para obtener fecha local en formato YYYY-MM-DD
+// Función helper para obtener fecha local en formato YYYY-MM-DD (zona horaria de Guatemala GMT-6)
 const getLocalDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
+  const now = new Date();
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-// Función helper para obtener fecha de mañana local
+// Función helper para obtener fecha de ayer local (zona horaria de Guatemala GMT-6)
+const getYesterdayLocalDate = () => {
+  const now = new Date();
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+  localTime.setDate(localTime.getDate() - 1); // Restar un día
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Función helper para obtener fecha de mañana local (zona horaria de Guatemala GMT-6)
 const getTomorrowLocalDate = () => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const year = tomorrow.getFullYear();
-  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-  const day = String(tomorrow.getDate()).padStart(2, '0');
+  const now = new Date();
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+  localTime.setDate(localTime.getDate() + 1); // Agregar un día
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-// Función helper para obtener fecha local de un Date object
+// Función helper para obtener fecha local de un Date object (zona horaria de Guatemala GMT-6)
 const getLocalDateFromDate = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(date.getTime() + (guatemalaOffset - date.getTimezoneOffset()) * 60000);
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -83,6 +108,23 @@ class DashboardService {
       const totalVisitantesHoy = entradas?.reduce((sum, e) => sum + (parseInt(e.cantidad) || 0), 0) || 0;
       const ingresosHoy = entradas?.reduce((sum, e) => sum + (parseFloat(e.total_venta) || 0), 0) || 0;
       logger.info('Visitantes stats', { totalVisitantesHoy, ingresosHoy });
+      
+      // Obtener visitantes de ayer
+      const fechaAyer = getYesterdayLocalDate();
+      const fechaHoyInicio = getLocalDate(); // Para delimitar el rango de ayer
+      const { data: entradasAyer, error: entradasAyerError } = await supabase
+        .from('entradas')
+        .select('cantidad, total_venta')
+        .gte('fecha_venta', fechaAyer)
+        .lt('fecha_venta', fechaHoyInicio);
+      
+      if (entradasAyerError) {
+        logger.error('Error fetching entradas de ayer', { error: entradasAyerError.message });
+      }
+      
+      const totalVisitantesAyer = entradasAyer?.reduce((sum, e) => sum + (parseInt(e.cantidad) || 0), 0) || 0;
+      const ingresosAyer = entradasAyer?.reduce((sum, e) => sum + (parseFloat(e.total_venta) || 0), 0) || 0;
+      logger.info('Visitantes ayer stats', { totalVisitantesAyer, ingresosAyer });
       
       // Obtener alimentos y bajo stock
       const { data: alimentos, error: alimentosError } = await supabase
@@ -144,7 +186,9 @@ class DashboardService {
         },
         visitantes: {
           hoy: totalVisitantesHoy,
-          ingresos_hoy: ingresosHoy
+          ayer: totalVisitantesAyer,
+          ingresos_hoy: ingresosHoy,
+          ingresos_ayer: ingresosAyer
         },
         alimentos: {
           total: totalAlimentos,

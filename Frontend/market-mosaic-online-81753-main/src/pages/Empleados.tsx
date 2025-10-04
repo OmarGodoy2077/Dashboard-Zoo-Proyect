@@ -42,7 +42,7 @@ export default function Empleados() {
     nombre: '',
     puesto: 'cuidador',
     salario: 0,
-    fecha_contratacion: new Date().toISOString().split('T')[0],
+    fecha_contratacion: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
     estado: 'activo',
     telefono: '',
     email: ''
@@ -338,7 +338,7 @@ export default function Empleados() {
       nombre: '',
       puesto: 'cuidador',
       salario: 0,
-      fecha_contratacion: new Date().toISOString().split('T')[0],
+      fecha_contratacion: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
       estado: 'activo',
       telefono: '',
       email: ''

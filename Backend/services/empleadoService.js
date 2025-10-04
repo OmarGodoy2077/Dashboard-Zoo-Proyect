@@ -1,6 +1,19 @@
 const { supabase } = require('../config/database');
 const { logger } = require('../middleware/logger');
 
+// Función helper para obtener fecha local en formato YYYY-MM-DD (zona horaria de Guatemala GMT-6)
+const getLocalDate = () => {
+  const now = new Date();
+  // Ajustar a zona horaria de Guatemala (UTC-6)
+  const guatemalaOffset = -6 * 60; // -6 horas en minutos
+  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+
+  const year = localTime.getFullYear();
+  const month = String(localTime.getMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 class EmpleadoService {
   async getAllEmpleados(filters = {}) {
     try {
@@ -126,10 +139,16 @@ class EmpleadoService {
         vacaciones_disponibles, inasistencias, suspensiones, estado
       } = empleadoData;
 
+      // Obtener el empleado actual antes de actualizar para comparar estados
+      const empleadoActual = await this.getEmpleadoById(id);
+      if (!empleadoActual) {
+        throw new Error('Empleado no encontrado');
+      }
+
       const updateData = {
         fecha_actualizacion: new Date().toISOString()
       };
-      
+
       if (nombre !== undefined) updateData.nombre = nombre;
       if (puesto !== undefined) updateData.puesto = puesto;
       if (salario !== undefined) updateData.salario = salario;
@@ -147,11 +166,16 @@ class EmpleadoService {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       if (!data) return null;
 
-      logger.info('Empleado updated', { empleadoId: id });
+      // Lógica para sincronizar con vacaciones cuando se cambia el estado manualmente
+      if (estado !== undefined && estado !== empleadoActual.estado) {
+        await this.sincronizarEstadoConVacaciones(id, estado);
+      }
+
+      logger.info('Empleado updated', { empleadoId: id, estadoCambiado: estado !== empleadoActual.estado });
       return data;
     } catch (error) {
       logger.error('Error updating empleado', { id, empleadoData, error: error.message });
@@ -176,6 +200,75 @@ class EmpleadoService {
     } catch (error) {
       logger.error('Error deleting empleado', { id, error: error.message });
       throw error;
+    }
+  }
+
+  // Método para sincronizar el estado del empleado con sus vacaciones activas
+  async sincronizarEstadoConVacaciones(empleadoId, nuevoEstado) {
+    try {
+      logger.info('Sincronizando estado de empleado con vacaciones', { empleadoId, nuevoEstado });
+
+      // Si se está cambiando manualmente a "vacaciones", verificar si hay vacaciones activas
+      if (nuevoEstado === 'vacaciones') {
+        // Obtener vacaciones aprobadas para este empleado
+        const hoy = getLocalDate();
+
+        const { data: vacacionesActivas, error } = await supabase
+          .from('vacaciones')
+          .select('id, fecha_inicio, fecha_fin')
+          .eq('empleado_id', empleadoId)
+          .eq('estado', 'aprobada')
+          .lte('fecha_inicio', hoy)
+          .gte('fecha_fin', hoy);
+
+        if (error) {
+          logger.error('Error obteniendo vacaciones activas', { empleadoId, error: error.message });
+          return;
+        }
+
+        if (vacacionesActivas && vacacionesActivas.length > 0) {
+          logger.info('Empleado tiene vacaciones activas, estado válido', { empleadoId, vacacionesCount: vacacionesActivas.length });
+        } else {
+          logger.warn('Empleado puesto en estado "vacaciones" manualmente sin vacaciones activas', { empleadoId });
+        }
+      }
+      // Si se está cambiando de "vacaciones" a otro estado, verificar si debería mantenerse en vacaciones
+      else if (nuevoEstado !== 'vacaciones') {
+        // Verificar si hay vacaciones activas que deberían mantener al empleado en estado "vacaciones"
+        const hoy = getLocalDate();
+
+        const { data: vacacionesActivas, error } = await supabase
+          .from('vacaciones')
+          .select('id, fecha_inicio, fecha_fin')
+          .eq('empleado_id', empleadoId)
+          .eq('estado', 'aprobada')
+          .lte('fecha_inicio', hoy)
+          .gte('fecha_fin', hoy);
+
+        if (error) {
+          logger.error('Error obteniendo vacaciones activas', { empleadoId, error: error.message });
+          return;
+        }
+
+        if (vacacionesActivas && vacacionesActivas.length > 0) {
+          logger.warn('Empleado tiene vacaciones activas pero se cambió manualmente a otro estado', {
+            empleadoId,
+            nuevoEstado,
+            vacacionesCount: vacacionesActivas.length
+          });
+
+          // Opcional: forzar que se mantenga en vacaciones si hay vacaciones activas
+          // await supabase
+          //   .from('empleados')
+          //   .update({ estado: 'vacaciones', fecha_actualizacion: new Date().toISOString() })
+          //   .eq('id', empleadoId);
+        }
+      }
+
+      logger.info('Sincronización de estado completada', { empleadoId, nuevoEstado });
+    } catch (error) {
+      logger.error('Error sincronizando estado con vacaciones', { empleadoId, nuevoEstado, error: error.message });
+      // No lanzar error para no interrumpir la actualización del empleado
     }
   }
 

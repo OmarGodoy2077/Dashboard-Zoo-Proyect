@@ -13,7 +13,8 @@ const clinicoService = {
         .from('tratamientos')
         .select(`
           *,
-          animal:animales(id, nombre, especie, estado_salud, habitat, edad, fecha_ingreso)
+          animal:animales(id, nombre, especie, estado_salud, habitat, fecha_registro),
+          veterinario:empleados(id, nombre)
         `)
         .order('fecha_inicio', { ascending: false });
 
@@ -55,7 +56,8 @@ const clinicoService = {
         .from('tratamientos')
         .select(`
           *,
-          animal:animales(id, nombre, especie, estado_salud, habitat, edad, fecha_ingreso)
+          animal:animales(id, nombre, especie, estado_salud, habitat, fecha_registro),
+          veterinario:empleados(id, nombre)
         `)
         .eq('id', id)
         .single();
@@ -79,17 +81,34 @@ const clinicoService = {
 
   async createTratamiento(data) {
     try {
+      // Buscar el ID del veterinario por nombre si se proporciona nombre
+      let veterinario_id = null;
+      if (data.veterinario) {
+        const { data: vetData, error: vetError } = await supabase
+          .from('empleados')
+          .select('id')
+          .eq('nombre', data.veterinario)
+          .eq('puesto', 'veterinario')
+          .single();
+        
+        if (!vetError && vetData) {
+          veterinario_id = vetData.id;
+        }
+      } else if (data.veterinario_id) {
+        veterinario_id = parseInt(data.veterinario_id);
+      }
+
       const tratamientoData = {
         animal_id: parseInt(data.animal_id),
         diagnostico: data.diagnostico,
         tratamiento: data.tratamiento,
-        medicamento: data.medicamento || null,
+        medicamento_id: data.medicamento && !isNaN(data.medicamento) ? parseInt(data.medicamento) : null,
         dosis: data.dosis || null,
         frecuencia: data.frecuencia || null,
         fecha_inicio: data.fecha_inicio || new Date().toISOString().split('T')[0],
         fecha_fin: data.fecha_fin,
         estado: data.estado || 'activo',
-        veterinario: data.veterinario || null,
+        veterinario_id: veterinario_id,
         notas: data.notas || null
       };
 
@@ -100,7 +119,8 @@ const clinicoService = {
         .insert([tratamientoData])
         .select(`
           *,
-          animal:animales(id, nombre, especie, estado_salud)
+          animal:animales(id, nombre, especie, estado_salud),
+          veterinario:empleados(id, nombre)
         `)
         .single();
 

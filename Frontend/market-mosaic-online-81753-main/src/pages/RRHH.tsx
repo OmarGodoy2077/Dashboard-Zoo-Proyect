@@ -179,6 +179,55 @@ export default function RRHH() {
           Ver Empleados
         </Button>
       </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <p className="text-blue-800 text-sm">
+              <strong>ℹ️ Nueva funcionalidad:</strong> Cuando se aprueban las vacaciones de un empleado, 
+              su estado se actualiza automáticamente a "vacaciones" durante el período especificado. 
+              Los empleados en vacaciones no aparecerán como disponibles en el dashboard.
+            </p>
+          </div>
+          {userRole === 'admin' && (
+            <Button
+              onClick={async () => {
+                try {
+                  const token = getToken();
+                  const response = await fetch(`${API_BASE_URL}/api/rrhh/actualizar-estado-vacaciones`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (response.ok) {
+                    toast({
+                      title: "Actualización completada",
+                      description: "Los estados de empleados han sido actualizados",
+                    });
+                    // Refrescar datos
+                    window.location.reload();
+                  } else {
+                    toast({
+                      variant: "destructive",
+                      title: "Error",
+                      description: "No se pudieron actualizar los estados",
+                    });
+                  }
+                } catch (error) {
+                  toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: "Error al actualizar estados",
+                  });
+                }
+              }}
+              variant="outline"
+              size="sm"
+            >
+              🔄 Actualizar Estados
+            </Button>
+          )}
+        </div>
+      </div>
       {userRole !== 'admin' && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
           <p className="text-yellow-800">
@@ -210,9 +259,15 @@ export default function RRHH() {
             })}
             onRefetch={() => {
               const token = getToken();
+              // Refrescar vacaciones
               fetch(`${API_BASE_URL}/api/rrhh/vacaciones`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(r => r.json()).then(d => setVacaciones(d.data || d || []));
+              
+              // Refrescar empleados para ver cambios de estado
+              fetch(`${API_BASE_URL}/api/empleados`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              }).then(r => r.json()).then(d => setEmpleados(d.data || d || []));
             }}
           />
         </TabsContent>
@@ -310,7 +365,48 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
 
   const handleCreate = async () => {
     try {
-      const token = getToken();
+      // Validación adicional para vacaciones
+      if (endpoint === 'vacaciones') {
+        // Validar que se haya seleccionado un empleado
+        if (!formData.empleado_id || formData.empleado_id === '') {
+          toast({
+            variant: "destructive",
+            title: "Error de validación",
+            description: "Debe seleccionar un empleado",
+          });
+          return;
+        }
+
+        if (formData.fecha_inicio && formData.fecha_fin) {
+          const fechaInicio = new Date(formData.fecha_inicio);
+          const fechaFin = new Date(formData.fecha_fin);
+          
+          if (fechaInicio > fechaFin) {
+            toast({
+              variant: "destructive",
+              title: "Error de validación",
+              description: "La fecha de inicio no puede ser posterior a la fecha de fin",
+            });
+            return;
+          }
+          
+          // Validar que no sea una fecha pasada (solo para nuevas vacaciones)
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+          // Comparar con fecha local de Guatemala
+          const fechaInicioLocal = new Date(formData.fecha_inicio + 'T00:00:00');
+          const hoyLocal = new Date(hoy.toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }) + 'T00:00:00');
+          
+          if (fechaInicioLocal < hoyLocal) {
+            toast({
+              variant: "destructive",
+              title: "Error de validación",
+              description: "La fecha de inicio no puede ser anterior a hoy",
+            });
+            return;
+          }
+        }
+      }      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/rrhh/${endpoint}`, {
         method: 'POST',
         headers: {
@@ -329,10 +425,11 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
         setFormData({});
         onRefetch(); // Refresh data
       } else {
+        const errorData = await response.json();
         toast({
           variant: "destructive",
           title: "Error",
-          description: "No se pudo crear el registro",
+          description: errorData.message || "No se pudo crear el registro",
         });
       }
     } catch (error) {
@@ -348,6 +445,23 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
     if (!editingItem) return;
 
     try {
+      // Validación adicional para vacaciones
+      if (endpoint === 'vacaciones') {
+        if (formData.fecha_inicio && formData.fecha_fin) {
+          const fechaInicio = new Date(formData.fecha_inicio);
+          const fechaFin = new Date(formData.fecha_fin);
+          
+          if (fechaInicio > fechaFin) {
+            toast({
+              variant: "destructive",
+              title: "Error de validación",
+              description: "La fecha de inicio no puede ser posterior a la fecha de fin",
+            });
+            return;
+          }
+        }
+      }
+
       const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/rrhh/${endpoint}/${editingItem.id}`, {
         method: 'PUT',
@@ -368,10 +482,11 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
         setFormData({});
         onRefetch(); // Refresh data
       } else {
+        const errorData = await response.json();
         toast({
           variant: "destructive",
           title: "Error",
-          description: "No se pudo actualizar el registro",
+          description: errorData.message || "No se pudo actualizar el registro",
         });
       }
     } catch (error) {
@@ -385,7 +500,11 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
 
   const openCreateDialog = () => {
     setEditingItem(null);
-    setFormData({});
+    setFormData({
+      fecha_inicio: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guatemala' }),
+      estado: 'solicitada',
+      empleado_id: '' // Inicializar vacío para que el usuario lo seleccione
+    });
     setDialogOpen(true);
   };
 
@@ -395,6 +514,11 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
     columns.forEach(col => {
       if (col === 'empleado_id') {
         newFormData[col] = item[col].toString();
+      } else if (col.includes('fecha')) {
+        // Convertir fecha UTC a zona horaria local (Guatemala GMT-6) y formatear para input date
+        const utcDate = new Date(item[col] + 'T00:00:00'); // Asegurar que se interprete como fecha local
+        const localDate = new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000));
+        newFormData[col] = localDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD para input date
       } else {
         newFormData[col] = item[col];
       }
@@ -412,13 +536,31 @@ function RRHHTable({ title, data, columns, columnLabels, endpoint, empleados, us
     if (value === null || value === undefined) return '-';
     if (typeof value === 'boolean') return value ? 'Sí' : 'No';
     if (label.toLowerCase().includes('fecha')) {
-      return new Date(value).toLocaleDateString('es-ES');
+      // Mostrar fecha directamente como string YYYY-MM-DD formateada
+      const date = new Date(value + 'T00:00:00');
+      return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
     }
     if (label.toLowerCase().includes('monto')) {
       return `$${Number(value).toFixed(2)}`;
     }
     if (col === 'empleado_id') {
       return getEmpleadoNombre(value);
+    }
+    if (col === 'estado') {
+      // Estados de vacaciones con colores
+      const estadoColors = {
+        'solicitada': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        'aprobada': 'bg-green-100 text-green-800 border-green-200',
+        'rechazada': 'bg-red-100 text-red-800 border-red-200',
+        'cancelada': 'bg-gray-100 text-gray-800 border-gray-200'
+      };
+      
+      const colorClass = estadoColors[value] || 'bg-gray-100 text-gray-800 border-gray-200';
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorClass}`}>
+          {value.charAt(0).toUpperCase() + value.slice(1)}
+        </span>
+      );
     }
     return value;
   };
