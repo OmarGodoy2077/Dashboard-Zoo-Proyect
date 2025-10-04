@@ -25,6 +25,7 @@ const rrhhService = require('./services/rrhhService');
 const authRoutes = require('./routes/auth.routes');
 const animalRoutes = require('./routes/animales.routes');
 const alimentoRoutes = require('./routes/alimentos.routes');
+const dietaRoutes = require('./routes/dieta.routes');
 const empleadoRoutes = require('./routes/empleados.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 
@@ -129,6 +130,7 @@ app.get('/status', require('express-status-monitor')());
 app.use('/api/auth', authRoutes);
 app.use('/api/animales', animalRoutes);
 app.use('/api/alimentos', alimentoRoutes);
+app.use('/api/dietas', dietaRoutes);
 app.use('/api/empleados', empleadoRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

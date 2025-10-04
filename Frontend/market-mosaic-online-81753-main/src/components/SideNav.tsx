@@ -87,7 +87,7 @@ export function SideNav({ className }: { className?: string }) {
                 }
                 >
                 <Stethoscope className="mr-2 h-4 w-4" />
-                Tratamientos Médicos
+                Control de Dietas
                 </NavLink>
             <NavLink
                 to="/promociones"

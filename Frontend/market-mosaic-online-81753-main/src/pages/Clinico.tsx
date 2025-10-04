@@ -1,12 +1,538 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { getToken, getUserRole } from '../utils/auth';
+import { Loader2, Plus, Pencil, Trash2, Clock } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
-const Clinico = () => {
+interface Animal {
+  id: number;
+  nombre: string;
+  especie: string;
+  estado_salud: string;
+}
+
+interface Alimento {
+  id: number;
+  nombre: string;
+  tipo: string;
+  unidad_medida: string;
+}
+
+interface HorarioAlimentacion {
+  id: number;
+  animal_id: number;
+  alimento_id: number;
+  hora: string;
+  frecuencia: string;
+  cantidad: number;
+  observaciones: string;
+  activo: boolean;
+  alimento_nombre: string;
+  alimento_tipo: string;
+  unidad_medida: string;
+}
+
+export default function Dietas() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [animales, setAnimales] = useState<Animal[]>([]);
+  const [alimentos, setAlimentos] = useState<Alimento[]>([]);
+  const [horarios, setHorarios] = useState<{[key: number]: HorarioAlimentacion[]}>({});
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
+  const [editingHorario, setEditingHorario] = useState<HorarioAlimentacion | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    alimento_id: '',
+    hora: '',
+    frecuencia: 'diario',
+    cantidad: '',
+    observaciones: '',
+  });
+
+  useEffect(() => {
+    setUserRole(getUserRole());
+    fetchAnimales();
+    fetchAlimentos();
+  }, []);
+
+  const fetchAnimales = async () => {
+    try {
+      const token = getToken();
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/animales`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAnimales(data.data || data);
+      } else {
+        if (response.status === 401) {
+          navigate('/login');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching animales:', error);
+    }
+  };
+
+  const fetchAlimentos = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/alimentos`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAlimentos(data.data || data);
+      }
+    } catch (error) {
+      console.error('Error fetching alimentos:', error);
+    }
+  };
+
+  const fetchHorariosAnimal = async (animalId: number) => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/dietas/animal/${animalId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHorarios(prev => ({
+          ...prev,
+          [animalId]: data.data || []
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching horarios:', error);
+    }
+  };
+
+  const handleCreateHorario = async () => {
+    if (!selectedAnimal) return;
+
+    try {
+      const token = getToken();
+      const response = await fetch(`${API_BASE_URL}/api/dietas`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          animal_id: selectedAnimal.id,
+          alimento_id: parseInt(formData.alimento_id),
+          hora: formData.hora,
+          frecuencia: formData.frecuencia,
+          cantidad: parseFloat(formData.cantidad),
+          observaciones: formData.observaciones,
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Horario de alimentación creado exitosamente",
+        });
+        setDialogOpen(false);
+        resetForm();
+        fetchHorariosAnimal(selectedAnimal.id);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo crear el horario",
+        });
+      }
+    } catch (error) {
+      console.error('Error creating horario:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al crear el horario",
+      });
+    }
+  };
+
+  const handleUpdateHorario = async () => {
+    if (!editingHorario || !selectedAnimal) return;
+
+    try {
+      const token = getToken();
+      const response = await fetch(`${API_BASE_URL}/api/dietas/${editingHorario.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          animal_id: selectedAnimal.id,
+          alimento_id: parseInt(formData.alimento_id),
+          hora: formData.hora,
+          frecuencia: formData.frecuencia,
+          cantidad: parseFloat(formData.cantidad),
+          observaciones: formData.observaciones,
+          activo: true,
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Horario de alimentación actualizado exitosamente",
+        });
+        setDialogOpen(false);
+        resetForm();
+        setEditingHorario(null);
+        fetchHorariosAnimal(selectedAnimal.id);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo actualizar el horario",
+        });
+      }
+    } catch (error) {
+      console.error('Error updating horario:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al actualizar el horario",
+      });
+    }
+  };
+
+  const handleDeleteHorario = async (horarioId: number) => {
+    if (!selectedAnimal) return;
+
+    try {
+      const token = getToken();
+      const response = await fetch(`${API_BASE_URL}/api/dietas/${horarioId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Horario de alimentación eliminado exitosamente",
+        });
+        fetchHorariosAnimal(selectedAnimal.id);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo eliminar el horario",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting horario:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar el horario",
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      alimento_id: '',
+      hora: '',
+      frecuencia: 'diario',
+      cantidad: '',
+      observaciones: '',
+    });
+  };
+
+  const openCreateDialog = (animal: Animal) => {
+    setSelectedAnimal(animal);
+    setEditingHorario(null);
+    resetForm();
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (animal: Animal, horario: HorarioAlimentacion) => {
+    setSelectedAnimal(animal);
+    setEditingHorario(horario);
+    setFormData({
+      alimento_id: horario.alimento_id.toString(),
+      hora: horario.hora,
+      frecuencia: horario.frecuencia,
+      cantidad: horario.cantidad.toString(),
+      observaciones: horario.observaciones,
+    });
+    setDialogOpen(true);
+  };
+
+  const canModify = userRole === 'admin' || userRole === 'veterinario';
+
+  useEffect(() => {
+    if (animales.length > 0) {
+      setLoading(false);
+    }
+  }, [animales]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Módulo Clínico</h1>
-      <p>Esta página está en desarrollo.</p>
+      <h1 className="text-2xl font-bold mb-4">Control de Dietas de Animales</h1>
+
+      <div className="space-y-6">
+        {animales.map((animal) => (
+          <div key={animal.id} className="border rounded-lg p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-semibold">{animal.nombre}</h2>
+                <p className="text-gray-600">{animal.especie} - Estado: {animal.estado_salud}</p>
+              </div>
+              {canModify && (
+                <Button onClick={() => openCreateDialog(animal)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Horario
+                </Button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Alimento</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Frecuencia</TableHead>
+                    <TableHead>Observaciones</TableHead>
+                    {canModify && <TableHead>Acciones</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(horarios[animal.id] || []).map((horario) => (
+                    <TableRow key={horario.id}>
+                      <TableCell>{horario.hora}</TableCell>
+                      <TableCell>{horario.alimento_nombre}</TableCell>
+                      <TableCell>{horario.cantidad} {horario.unidad_medida}</TableCell>
+                      <TableCell>{horario.frecuencia}</TableCell>
+                      <TableCell>{horario.observaciones}</TableCell>
+                      {canModify && (
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(animal, horario)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción eliminará el horario de alimentación.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteHorario(horario.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                  {(horarios[animal.id] || []).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={canModify ? 6 : 5} className="text-center text-gray-500">
+                        No hay horarios de alimentación configurados
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {(horarios[animal.id] || []).length === 0 && (
+              <Button
+                variant="outline"
+                onClick={() => fetchHorariosAnimal(animal.id)}
+                className="mt-4"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Cargar Dieta
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingHorario ? 'Editar Horario de Alimentación' : 'Crear Horario de Alimentación'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAnimal && `Para el animal: ${selectedAnimal.nombre} (${selectedAnimal.especie})`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="alimento" className="text-right">
+                Alimento
+              </Label>
+              <Select value={formData.alimento_id} onValueChange={(value) => setFormData({...formData, alimento_id: value})}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Seleccionar alimento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {alimentos.map((alimento) => (
+                    <SelectItem key={alimento.id} value={alimento.id.toString()}>
+                      {alimento.nombre} ({alimento.tipo})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="hora" className="text-right">
+                Hora
+              </Label>
+              <Input
+                id="hora"
+                type="time"
+                value={formData.hora}
+                onChange={(e) => setFormData({...formData, hora: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="frecuencia" className="text-right">
+                Frecuencia
+              </Label>
+              <Select value={formData.frecuencia} onValueChange={(value) => setFormData({...formData, frecuencia: value})}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="diario">Diario</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
+                  <SelectItem value="cada_dos_dias">Cada dos días</SelectItem>
+                  <SelectItem value="cada_tres_dias">Cada tres días</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cantidad" className="text-right">
+                Cantidad
+              </Label>
+              <Input
+                id="cantidad"
+                type="number"
+                step="0.1"
+                value={formData.cantidad}
+                onChange={(e) => setFormData({...formData, cantidad: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="observaciones" className="text-right">
+                Observaciones
+              </Label>
+              <Input
+                id="observaciones"
+                value={formData.observaciones}
+                onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="submit" onClick={editingHorario ? handleUpdateHorario : handleCreateHorario}>
+              {editingHorario ? 'Actualizar' : 'Crear'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-export default Clinico;
+}

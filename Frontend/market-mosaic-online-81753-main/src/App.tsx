@@ -18,7 +18,7 @@ import RRHH from "./pages/RRHH";
 import Reportes from "./pages/Reportes";
 import Settings from "./pages/Settings";
 import Empleados from "./pages/Empleados";
-import Clinico from "./pages/Clinico";
+import Dietas from "./pages/Clinico";
 import AlertasMedicas from "./pages/AlertasMedicas";
 import { SideNav } from "./components/SideNav";
 import { Toaster } from "./components/ui/toaster";
@@ -55,7 +55,7 @@ function App() {
             <Route path="/entradas" element={<Entradas />} />
             <Route path="/empleados" element={<Empleados />} />
             <Route path="/alertas-medicas" element={<AlertasMedicas />} />
-            <Route path="/clinico" element={<Clinico />} />
+            <Route path="/clinico" element={<Dietas />} />
             <Route path="/rrhh" element={<RRHH />} />
             <Route path="/reportes" element={<Reportes />} />
             <Route path="/profile" element={<Profile />} />
