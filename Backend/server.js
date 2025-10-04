@@ -38,6 +38,7 @@ const inventarioRoutes = require('./routes/inventario.routes');
 const entradaRoutes = require('./routes/entradas.routes');
 const promocionRoutes = require('./routes/promociones.routes');
 const rrhhRoutes = require('./routes/rrhh.routes');
+const userRoutes = require('./routes/usuarios.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -143,6 +144,7 @@ app.use('/api/inventario', inventarioRoutes);
 app.use('/api/entradas', entradaRoutes);
 app.use('/api/promociones', promocionRoutes);
 app.use('/api/rrhh', rrhhRoutes);
+app.use('/api/usuarios', userRoutes);
 
 // Ruta para acceso directo al dashboard
 app.get('/dashboard', (req, res) => {
@@ -270,15 +272,16 @@ const startServer = () => {
 
 // Verificar conexión a base de datos antes de iniciar
 if (process.env.NODE_ENV !== 'test') {
-  testConnection()
-    .then(() => {
-      logger.info('✅ Conexión a base de datos exitosa');
-      startServer();
-    })
-    .catch((error) => {
-      logger.error('❌ Error conectando a la base de datos:', error);
-      process.exit(1);
-    });
+  // testConnection()
+  //   .then(() => {
+  //     logger.info('✅ Conexión a base de datos exitosa');
+  //     startServer();
+  //   })
+  //   .catch((error) => {
+  //     logger.error('❌ Error conectando a la base de datos:', error);
+  //     process.exit(1);
+  //   });
+  startServer();
 }
 
 // Manejo de errores no capturados

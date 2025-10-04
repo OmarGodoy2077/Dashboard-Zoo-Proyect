@@ -26,7 +26,8 @@ const register = async (req, res, next) => {
     const token = generateToken({ 
       userId: user.id, 
       email: user.email, 
-      rol: user.rol 
+      rol: user.rol,
+      nombre: user.nombre
     });
 
     logger.info('User registered successfully', { 
@@ -81,7 +82,8 @@ const login = async (req, res, next) => {
     const token = generateToken({ 
       userId: user.id, 
       email: user.email, 
-      rol: user.rol 
+      rol: user.rol,
+      nombre: user.nombre
     });
 
     logger.info('User logged in successfully', { 

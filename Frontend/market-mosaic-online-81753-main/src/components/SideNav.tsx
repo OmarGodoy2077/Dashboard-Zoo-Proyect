@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserMenu } from "./UserMenu";
+import { getCurrentUser } from "@/utils/auth";
 
 import {
     LayoutDashboard,
@@ -18,6 +19,9 @@ import {
   } from "lucide-react";
 
 export function SideNav({ className }: { className?: string }) {
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.rol === 'admin';
+
   return (
     <div className={cn("pb-12 border-r flex flex-col h-screen", className)}>
       <div className="space-y-4 py-4 flex-1">
@@ -89,8 +93,9 @@ export function SideNav({ className }: { className?: string }) {
                 <Stethoscope className="mr-2 h-4 w-4" />
                 Control de Dietas
                 </NavLink>
-            <NavLink
-                to="/promociones"
+            {isAdmin && (
+              <NavLink
+                to="/usuarios"
                 className={({ isActive }) =>
                     cn(
                     "flex items-center px-4 py-2 rounded-lg",
@@ -98,9 +103,10 @@ export function SideNav({ className }: { className?: string }) {
                     )
                 }
                 >
-                <Tag className="mr-2 h-4 w-4" />
-                Promociones
+                <Users className="mr-2 h-4 w-4" />
+                Administrador de Usuarios
                 </NavLink>
+            )}
             <NavLink
                 to="/entradas"
                 className={({ isActive }) =>

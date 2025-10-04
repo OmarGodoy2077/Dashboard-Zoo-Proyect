@@ -63,3 +63,21 @@ export const getUserRole = (): string | null => {
     return null;
   }
 };
+
+export const getCurrentUser = () => {
+  try {
+    const token = getToken();
+    if (!token) return null;
+    
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return {
+      id: payload.userId,
+      email: payload.email,
+      rol: payload.rol,
+      nombre: payload.nombre || 'Usuario' // Si no está en el token, usar default
+    };
+  } catch (error) {
+    console.error('Error al obtener el usuario actual:', error);
+    return null;
+  }
+};

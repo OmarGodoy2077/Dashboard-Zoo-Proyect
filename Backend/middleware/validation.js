@@ -522,6 +522,49 @@ const validateClinico = [
   }
 ];
 
+// Validación para crear usuario
+const validateUserCreate = [
+  body('nombre')
+    .notEmpty().withMessage('El nombre es requerido')
+    .isLength({ min: 2, max: 100 }).withMessage('El nombre debe tener entre 2 y 100 caracteres')
+    .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('El nombre solo puede contener letras y espacios'),
+  body('email')
+    .isEmail().withMessage('Debe proporcionar un email válido')
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial'),
+  body('rol')
+    .optional()
+    .isIn(['admin', 'veterinario', 'empleado', 'contador'])
+    .withMessage('Rol inválido. Valores permitidos: admin, veterinario, empleado, contador')
+];
+
+// Validación para actualizar usuario
+const validateUserUpdate = [
+  body('nombre')
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage('El nombre debe tener entre 2 y 100 caracteres')
+    .matches(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/).withMessage('El nombre solo puede contener letras y espacios'),
+  body('email')
+    .optional()
+    .isEmail().withMessage('Debe proporcionar un email válido')
+    .normalizeEmail(),
+  body('rol')
+    .optional()
+    .isIn(['admin', 'veterinario', 'empleado', 'contador'])
+    .withMessage('Rol inválido. Valores permitidos: admin, veterinario, empleado, contador')
+];
+
+// Validación para cambiar rol
+const validateUserRole = [
+  body('rol')
+    .notEmpty().withMessage('El rol es requerido')
+    .isIn(['admin', 'veterinario', 'empleado', 'contador'])
+    .withMessage('Rol inválido. Valores permitidos: admin, veterinario, empleado, contador')
+];
+
 module.exports = {
   handleValidationErrors,
   validateRegister,
@@ -539,5 +582,8 @@ module.exports = {
   validateNomina,
   validateInventario,
   validateEntrada,
-  validateClinico
+  validateClinico,
+  validateUserCreate,
+  validateUserUpdate,
+  validateUserRole
 };

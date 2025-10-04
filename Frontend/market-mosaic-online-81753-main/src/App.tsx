@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import Empleados from "./pages/Empleados";
 import Dietas from "./pages/Clinico";
 import AlertasMedicas from "./pages/AlertasMedicas";
+import UserManagement from "./pages/UserManagement";
 import { SideNav } from "./components/SideNav";
 import { Toaster } from "./components/ui/toaster";
 import { isAuthenticated } from "./utils/auth";
@@ -56,6 +57,7 @@ function App() {
             <Route path="/empleados" element={<Empleados />} />
             <Route path="/alertas-medicas" element={<AlertasMedicas />} />
             <Route path="/clinico" element={<Dietas />} />
+            <Route path="/usuarios" element={<UserManagement />} />
             <Route path="/rrhh" element={<RRHH />} />
             <Route path="/reportes" element={<Reportes />} />
             <Route path="/profile" element={<Profile />} />
