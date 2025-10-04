@@ -37,6 +37,22 @@ import { getToken, getUserRole } from '../utils/auth';
 import { Loader2, Plus, Pencil, Trash2, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 
+// Función para convertir fecha UTC a hora de Guatemala
+const formatGuatemalaTime = (dateString: string | null) => {
+  if (!dateString) return 'Nunca';
+  const date = new Date(dateString);
+  // Guatemala está en GMT-6
+  const guatemalaTime = new Date(date.getTime() - (6 * 60 * 60 * 1000));
+  return guatemalaTime.toLocaleString('es-GT', {
+    timeZone: 'America/Guatemala',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 interface Animal {
   id: number;
   nombre: string;
@@ -80,6 +96,7 @@ export default function Dietas() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [proximasEjecuciones, setProximasEjecuciones] = useState<any[]>([]);
   const [estadisticasEjecuciones, setEstadisticasEjecuciones] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [formData, setFormData] = useState({
     alimento_id: '',
     hora: '',
@@ -93,7 +110,16 @@ export default function Dietas() {
     fetchAnimales();
     fetchAlimentos();
     fetchEstadisticasEjecuciones();
-  }, []);
+
+    // Actualización automática cada 30 segundos
+    const interval = setInterval(() => {
+      if (!dialogOpen && !refreshing) {
+        refreshAllData();
+      }
+    }, 30000); // 30 segundos
+
+    return () => clearInterval(interval);
+  }, [dialogOpen, refreshing]);
 
   const fetchAnimales = async () => {
     try {
@@ -186,6 +212,25 @@ export default function Dietas() {
     }
   };
 
+  const refreshAllData = async () => {
+    setRefreshing(true);
+    try {
+      // Actualizar estadísticas
+      await fetchEstadisticasEjecuciones();
+      
+      // Actualizar horarios de animales que ya tienen horarios cargados
+      for (const animal of animales) {
+        if (horarios[animal.id] && horarios[animal.id].length > 0) {
+          await fetchHorariosAnimal(animal.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleCreateHorario = async () => {
     if (!selectedAnimal) return;
 
@@ -215,6 +260,7 @@ export default function Dietas() {
         setDialogOpen(false);
         resetForm();
         fetchHorariosAnimal(selectedAnimal.id);
+        fetchEstadisticasEjecuciones();
       } else {
         toast({
           variant: "destructive",
@@ -263,6 +309,7 @@ export default function Dietas() {
         resetForm();
         setEditingHorario(null);
         fetchHorariosAnimal(selectedAnimal.id);
+        fetchEstadisticasEjecuciones();
       } else {
         toast({
           variant: "destructive",
@@ -335,6 +382,7 @@ export default function Dietas() {
           description: "Horario de alimentación eliminado exitosamente",
         });
         fetchHorariosAnimal(selectedAnimal.id);
+        fetchEstadisticasEjecuciones();
       } else {
         toast({
           variant: "destructive",
@@ -400,7 +448,27 @@ export default function Dietas() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Control de Dietas de Animales</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Control de Dietas de Animales</h1>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshAllData}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Clock className="h-4 w-4 mr-2" />
+            )}
+            Actualizar
+          </Button>
+          <div className="text-sm text-gray-600">
+            Actualización automática cada 30s
+          </div>
+        </div>
+      </div>
 
       {/* Estadísticas de ejecuciones */}
       {estadisticasEjecuciones && (
@@ -488,13 +556,13 @@ export default function Dietas() {
                       <TableCell>{horario.observaciones}</TableCell>
                       <TableCell>
                         {horario.ultima_ejecucion
-                          ? new Date(horario.ultima_ejecucion).toLocaleString()
+                          ? formatGuatemalaTime(horario.ultima_ejecucion)
                           : 'Nunca'
                         }
                       </TableCell>
                       <TableCell>
                         {horario.proxima_ejecucion
-                          ? new Date(horario.proxima_ejecucion).toLocaleString()
+                          ? formatGuatemalaTime(horario.proxima_ejecucion)
                           : 'Pendiente'
                         }
                       </TableCell>

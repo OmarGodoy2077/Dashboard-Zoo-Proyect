@@ -27,7 +27,9 @@ class DateUtils {
   }
 
   // Calcular próxima ejecución en zona horaria de Guatemala
-  static calcularProximaEjecucion(frecuencia, hora) {
+  // Para creación inicial: siempre devuelve hoy a la hora especificada
+  // Para recalculo después de ejecución: calcula la siguiente según frecuencia
+  static calcularProximaEjecucion(frecuencia, hora, esRecalculo = false) {
     const ahora = this.getGuatemalaTime();
     const [horas, minutos] = hora.split(':').map(Number);
     const horaHoy = new Date(ahora);
@@ -35,35 +37,37 @@ class DateUtils {
 
     let proximaEjecucion;
 
-    switch (frecuencia) {
-      case 'diario':
-        proximaEjecucion = new Date(horaHoy);
-        if (proximaEjecucion <= ahora) {
+    if (!esRecalculo) {
+      // Para creación inicial: siempre hoy a la hora configurada
+      proximaEjecucion = new Date(horaHoy);
+    } else {
+      // Para recalculo después de ejecución: calcular siguiente período
+      switch (frecuencia) {
+        case 'diario':
+          proximaEjecucion = new Date(horaHoy);
           proximaEjecucion.setDate(proximaEjecucion.getDate() + 1);
-        }
-        break;
+          break;
 
-      case 'semanal':
-        proximaEjecucion = new Date(horaHoy);
-        proximaEjecucion.setDate(proximaEjecucion.getDate() + 7);
-        break;
+        case 'semanal':
+          proximaEjecucion = new Date(horaHoy);
+          proximaEjecucion.setDate(proximaEjecucion.getDate() + 7);
+          break;
 
-      case 'cada_dos_dias':
-        proximaEjecucion = new Date(horaHoy);
-        proximaEjecucion.setDate(proximaEjecucion.getDate() + 2);
-        break;
+        case 'cada_dos_dias':
+          proximaEjecucion = new Date(horaHoy);
+          proximaEjecucion.setDate(proximaEjecucion.getDate() + 2);
+          break;
 
-      case 'cada_tres_dias':
-        proximaEjecucion = new Date(horaHoy);
-        proximaEjecucion.setDate(proximaEjecucion.getDate() + 3);
-        break;
+        case 'cada_tres_dias':
+          proximaEjecucion = new Date(horaHoy);
+          proximaEjecucion.setDate(proximaEjecucion.getDate() + 3);
+          break;
 
-      default:
-        // Por defecto diario
-        proximaEjecucion = new Date(horaHoy);
-        if (proximaEjecucion <= ahora) {
+        default:
+          // Por defecto diario
+          proximaEjecucion = new Date(horaHoy);
           proximaEjecucion.setDate(proximaEjecucion.getDate() + 1);
-        }
+      }
     }
 
     return proximaEjecucion;

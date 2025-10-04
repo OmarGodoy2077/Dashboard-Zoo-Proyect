@@ -45,4 +45,7 @@ router.get('/:id', auth, limpiezaController.getTareaById);
 router.put('/:id', auth, validateLimpieza, limpiezaController.updateTarea);
 router.delete('/:id', auth, authorize('admin'), limpiezaController.deleteTarea);
 
+// Ruta para obtener empleados disponibles para tareas de limpieza
+router.get('/empleados/disponibles', auth, limpiezaController.getEmpleadosDisponibles);
+
 module.exports = router;

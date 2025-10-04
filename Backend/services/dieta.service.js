@@ -207,7 +207,7 @@ class DietaService {
         const nuevaHora = hora || (await supabase.from('horarios_alimentacion').select('hora').eq('id', id).single()).data?.hora;
 
         if (nuevaFrecuencia && nuevaHora) {
-          const proximaEjecucion = DateUtils.calcularProximaEjecucion(nuevaFrecuencia, nuevaHora);
+          const proximaEjecucion = DateUtils.calcularProximaEjecucion(nuevaFrecuencia, nuevaHora, false);
           updateData.proxima_ejecucion = DateUtils.toISOString(proximaEjecucion);
         }
       }

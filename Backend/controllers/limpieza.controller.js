@@ -101,7 +101,7 @@ const deleteTarea = async (req, res) => {
     const { id } = req.params;
     await limpiezaService.deleteTareaLimpieza(id);
 
-    res.status(20).json({
+    res.status(200).json({
       success: true,
       message: 'Tarea de limpieza eliminada exitosamente'
     });
@@ -115,10 +115,30 @@ const deleteTarea = async (req, res) => {
   }
 };
 
+const getEmpleadosDisponibles = async (req, res) => {
+  try {
+    const empleados = await limpiezaService.getEmpleadosDisponiblesLimpieza();
+
+    res.status(200).json({
+      success: true,
+      data: empleados,
+      message: 'Empleados disponibles para tareas de limpieza obtenidos exitosamente'
+    });
+  } catch (error) {
+    logger.error('Error en getEmpleadosDisponibles', { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener empleados disponibles',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllTareas,
   getTareaById,
   createTarea,
   updateTarea,
-  deleteTarea
+  deleteTarea,
+  getEmpleadosDisponibles
 };

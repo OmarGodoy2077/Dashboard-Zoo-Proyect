@@ -77,7 +77,7 @@ class DietaSchedulerService {
       await alimentoService.updateStock(horario.alimento_id, -cantidadAConsumir, 'salida');
 
       // Calcular próxima ejecución
-      const proximaEjecucion = DateUtils.calcularProximaEjecucion(horario.frecuencia, horario.hora);
+      const proximaEjecucion = DateUtils.calcularProximaEjecucion(horario.frecuencia, horario.hora, true);
 
       // Actualizar el horario con la ejecución
       const { error: updateError } = await supabase

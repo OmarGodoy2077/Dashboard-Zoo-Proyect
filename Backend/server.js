@@ -232,8 +232,8 @@ const startServer = () => {
     }
   });
 
-  // Programar procesamiento automático de alimentaciones cada hora
-  cron.schedule('0 * * * *', async () => {
+  // Programar procesamiento automático de alimentaciones cada 5 minutos
+  cron.schedule('*/5 * * * *', async () => {
     try {
       logger.info('⏰ Iniciando procesamiento automático de alimentaciones programadas');
       const resultados = await dietaScheduler.procesarAlimentacionesPendientes();

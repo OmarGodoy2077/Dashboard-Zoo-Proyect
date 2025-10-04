@@ -55,6 +55,7 @@ export default function Limpieza() {
   const { toast } = useToast();
   const [tareas, setTareas] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [allEmpleados, setAllEmpleados] = useState([]); // Para mostrar información histórica
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -67,6 +68,19 @@ export default function Limpieza() {
     estado: 'pendiente',
     fecha_limite: '',
   });
+
+  const getEmpleadoDisplayName = (tarea: any) => {
+    if (tarea.encargado) return tarea.encargado;
+    
+    const empleado = allEmpleados.find((e: any) => e.id === tarea.encargado_id);
+    if (!empleado) return 'Sin asignar';
+    
+    if (empleado.estado === 'vacaciones') {
+      return `${empleado.nombre} (En vacaciones)`;
+    }
+    
+    return empleado.nombre;
+  };
 
   const fetchTareas = async () => {
     try {
@@ -131,7 +145,7 @@ export default function Limpieza() {
       }
       
   // ...existing code...
-      const response = await fetch(`${API_BASE_URL}/api/empleados`, {
+      const response = await fetch(`${API_BASE_URL}/api/limpieza/empleados/disponibles`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -164,12 +178,40 @@ export default function Limpieza() {
     }
   };
 
+  const fetchAllEmpleados = async () => {
+    try {
+      const token = getToken();
+      if (!token) {
+        console.error('No token found for all empleados');
+        return;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/empleados`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        const empleadosData = result.data || result || [];
+        setAllEmpleados(empleadosData);
+      } else {
+        console.error('Error fetching all empleados:', response.status);
+        setAllEmpleados([]);
+      }
+    } catch (error) {
+      console.error('Error fetching all empleados:', error);
+      setAllEmpleados([]);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     
     const loadData = async () => {
       if (isMounted) {
-        await Promise.all([fetchTareas(), fetchEmpleados()]);
+        await Promise.all([fetchTareas(), fetchEmpleados(), fetchAllEmpleados()]);
       }
     };
     
@@ -508,9 +550,7 @@ export default function Limpieza() {
                   <TableCell className="font-medium">{tarea.area}</TableCell>
                   <TableCell>{tarea.descripcion}</TableCell>
                   <TableCell>
-                    {tarea.encargado || 
-                     empleados.find((e: any) => e.id === tarea.encargado_id)?.nombre || 
-                     'Sin asignar'}
+                    {getEmpleadoDisplayName(tarea)}
                   </TableCell>
                   <TableCell>{getStatusBadge(tarea)}</TableCell>
                   <TableCell>{new Date(tarea.fecha_limite).toLocaleString('es-ES')}</TableCell>
@@ -554,9 +594,7 @@ export default function Limpieza() {
                 <TableCell className="font-medium">{tarea.area}</TableCell>
                 <TableCell>{tarea.descripcion}</TableCell>
                 <TableCell>
-                  {tarea.encargado || 
-                   empleados.find((e: any) => e.id === tarea.encargado_id)?.nombre || 
-                   'Sin asignar'}
+                  {getEmpleadoDisplayName(tarea)}
                 </TableCell>
                 <TableCell>{getStatusBadge(tarea)}</TableCell>
                 <TableCell>{new Date(tarea.fecha_limite).toLocaleString('es-ES')}</TableCell>

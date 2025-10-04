@@ -72,6 +72,31 @@ const getTareaLimpiezaById = async (id) => {
 
 const createTareaLimpieza = async (tareaData) => {
   try {
+    // Validar que el encargado no esté en vacaciones si se proporciona
+    if (tareaData.encargado_id && tareaData.encargado_id !== '' && tareaData.encargado_id !== 'none') {
+      const encargadoId = parseInt(tareaData.encargado_id);
+      
+      // Verificar estado del empleado
+      const { data: empleado, error: empleadoError } = await supabase
+        .from('empleados')
+        .select('id, nombre, estado')
+        .eq('id', encargadoId)
+        .single();
+      
+      if (empleadoError) {
+        logger.error('Error obteniendo empleado para validación', { encargadoId, error: empleadoError.message });
+        throw new Error('Error al validar el empleado asignado');
+      }
+      
+      if (!empleado) {
+        throw new Error('El empleado asignado no existe');
+      }
+      
+      if (empleado.estado === 'vacaciones') {
+        throw new Error(`El empleado ${empleado.nombre} está actualmente en estado "vacaciones" y no puede ser asignado a tareas de limpieza`);
+      }
+    }
+
     // Mapear campos del frontend al formato de la base de datos
     const mappedData = {
       area: tareaData.area,
@@ -103,7 +128,7 @@ const createTareaLimpieza = async (tareaData) => {
 
     logger.info('Limpieza task created successfully', { taskId: data.id, area: data.area });
     return data;
- } catch (error) {
+  } catch (error) {
     logger.error('Error creating limpieza task', { tareaData, error: error.message });
     throw error;
   }
@@ -111,6 +136,31 @@ const createTareaLimpieza = async (tareaData) => {
 
 const updateTareaLimpieza = async (id, tareaData) => {
   try {
+    // Validar que el encargado no esté en vacaciones si se está actualizando
+    if (tareaData.encargado_id !== undefined && tareaData.encargado_id !== '' && tareaData.encargado_id !== 'none' && tareaData.encargado_id !== null) {
+      const encargadoId = parseInt(tareaData.encargado_id);
+      
+      // Verificar estado del empleado
+      const { data: empleado, error: empleadoError } = await supabase
+        .from('empleados')
+        .select('id, nombre, estado')
+        .eq('id', encargadoId)
+        .single();
+      
+      if (empleadoError) {
+        logger.error('Error obteniendo empleado para validación en actualización', { encargadoId, error: empleadoError.message });
+        throw new Error('Error al validar el empleado asignado');
+      }
+      
+      if (!empleado) {
+        throw new Error('El empleado asignado no existe');
+      }
+      
+      if (empleado.estado === 'vacaciones') {
+        throw new Error(`El empleado ${empleado.nombre} está actualmente en estado "vacaciones" y no puede ser asignado a tareas de limpieza`);
+      }
+    }
+
     // Mapear campos del frontend al formato de la base de datos
     const updateData = {};
     if (tareaData.area !== undefined) updateData.area = tareaData.area;
@@ -193,11 +243,33 @@ const checkTareasVencidas = async () => {
   }
 };
 
+// Función para obtener empleados disponibles para tareas de limpieza (no en vacaciones)
+const getEmpleadosDisponiblesLimpieza = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('empleados')
+      .select('id, nombre, puesto, estado')
+      .eq('estado', 'activo') // Solo empleados activos
+      .order('nombre', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    logger.info('Empleados disponibles para limpieza obtenidos', { count: data?.length || 0 });
+    return data || [];
+  } catch (error) {
+    logger.error('Error getting empleados disponibles para limpieza', { error: error.message });
+    throw error;
+  }
+};
+
 module.exports = {
   getAllTareasLimpieza,
   getTareaLimpiezaById,
   createTareaLimpieza,
   updateTareaLimpieza,
   deleteTareaLimpieza,
-  checkTareasVencidas
+  checkTareasVencidas,
+  getEmpleadosDisponiblesLimpieza
 };

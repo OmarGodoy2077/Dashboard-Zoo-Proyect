@@ -6,7 +6,7 @@ const getLocalDate = () => {
   const now = new Date();
   // Ajustar a zona horaria de Guatemala (UTC-6)
   const guatemalaOffset = -6 * 60; // -6 horas en minutos
-  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+  const localTime = new Date(now.getTime() + (now.getTimezoneOffset() + guatemalaOffset) * 60000);
 
   const year = localTime.getFullYear();
   const month = String(localTime.getMonth() + 1).padStart(2, '0');
@@ -19,7 +19,7 @@ const getYesterdayLocalDate = () => {
   const now = new Date();
   // Ajustar a zona horaria de Guatemala (UTC-6)
   const guatemalaOffset = -6 * 60; // -6 horas en minutos
-  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+  const localTime = new Date(now.getTime() + (now.getTimezoneOffset() + guatemalaOffset) * 60000);
   localTime.setDate(localTime.getDate() - 1); // Restar un día
 
   const year = localTime.getFullYear();
@@ -33,7 +33,7 @@ const getTomorrowLocalDate = () => {
   const now = new Date();
   // Ajustar a zona horaria de Guatemala (UTC-6)
   const guatemalaOffset = -6 * 60; // -6 horas en minutos
-  const localTime = new Date(now.getTime() + (guatemalaOffset - now.getTimezoneOffset()) * 60000);
+  const localTime = new Date(now.getTime() + (now.getTimezoneOffset() + guatemalaOffset) * 60000);
   localTime.setDate(localTime.getDate() + 1); // Agregar un día
 
   const year = localTime.getFullYear();
@@ -46,7 +46,7 @@ const getTomorrowLocalDate = () => {
 const getLocalDateFromDate = (date) => {
   // Ajustar a zona horaria de Guatemala (UTC-6)
   const guatemalaOffset = -6 * 60; // -6 horas en minutos
-  const localTime = new Date(date.getTime() + (guatemalaOffset - date.getTimezoneOffset()) * 60000);
+  const localTime = new Date(date.getTime() + (date.getTimezoneOffset() + guatemalaOffset) * 60000);
 
   const year = localTime.getFullYear();
   const month = String(localTime.getMonth() + 1).padStart(2, '0');
