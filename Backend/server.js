@@ -20,6 +20,7 @@ const { validateContentType, bodyParserErrorHandler, logRequestBody } = require(
 const { testConnection } = require('./config/database');
 const websocketService = require('./services/websocketService');
 const rrhhService = require('./services/rrhhService');
+const dietaScheduler = require('./services/dietaScheduler.service');
 
 // Importar rutas
 const authRoutes = require('./routes/auth.routes');
@@ -228,6 +229,19 @@ const startServer = () => {
       logger.info('✅ Actualización automática completada', resultado);
     } catch (error) {
       logger.error('❌ Error en actualización automática de estado de empleados por vacaciones', error);
+    }
+  });
+
+  // Programar procesamiento automático de alimentaciones cada hora
+  cron.schedule('0 * * * *', async () => {
+    try {
+      logger.info('⏰ Iniciando procesamiento automático de alimentaciones programadas');
+      const resultados = await dietaScheduler.procesarAlimentacionesPendientes();
+      const exitosas = resultados.filter(r => r.success).length;
+      const fallidas = resultados.filter(r => !r.success).length;
+      logger.info(`✅ Procesamiento automático completado: ${exitosas} exitosas, ${fallidas} fallidas`);
+    } catch (error) {
+      logger.error('❌ Error en procesamiento automático de alimentaciones', error);
     }
   });
 

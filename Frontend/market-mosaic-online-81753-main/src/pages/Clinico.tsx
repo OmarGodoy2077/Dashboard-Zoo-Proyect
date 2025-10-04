@@ -60,6 +60,8 @@ interface HorarioAlimentacion {
   cantidad: number;
   observaciones: string;
   activo: boolean;
+  ultima_ejecucion?: string;
+  proxima_ejecucion?: string;
   alimento_nombre: string;
   alimento_tipo: string;
   unidad_medida: string;
@@ -76,6 +78,8 @@ export default function Dietas() {
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [editingHorario, setEditingHorario] = useState<HorarioAlimentacion | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [proximasEjecuciones, setProximasEjecuciones] = useState<any[]>([]);
+  const [estadisticasEjecuciones, setEstadisticasEjecuciones] = useState<any>(null);
   const [formData, setFormData] = useState({
     alimento_id: '',
     hora: '',
@@ -88,6 +92,7 @@ export default function Dietas() {
     setUserRole(getUserRole());
     fetchAnimales();
     fetchAlimentos();
+    fetchEstadisticasEjecuciones();
   }, []);
 
   const fetchAnimales = async () => {
@@ -157,6 +162,27 @@ export default function Dietas() {
       }
     } catch (error) {
       console.error('Error fetching horarios:', error);
+    }
+  };
+
+  const fetchEstadisticasEjecuciones = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/dietas/ejecuciones/estadisticas`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setEstadisticasEjecuciones(data.data);
+        setProximasEjecuciones(data.data?.proximasEjecuciones || []);
+      }
+    } catch (error) {
+      console.error('Error fetching estadísticas de ejecuciones:', error);
     }
   };
 
@@ -254,6 +280,43 @@ export default function Dietas() {
     }
   };
 
+  const handleEjecutarAlimentacion = async (horarioId: number) => {
+    try {
+      const token = getToken();
+      const response = await fetch(`${API_BASE_URL}/api/dietas/${horarioId}/ejecutar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Alimentación ejecutada exitosamente",
+        });
+        // Recargar datos
+        fetchEstadisticasEjecuciones();
+        if (selectedAnimal) {
+          fetchHorariosAnimal(selectedAnimal.id);
+        }
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo ejecutar la alimentación",
+        });
+      }
+    } catch (error) {
+      console.error('Error ejecutando alimentación:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al ejecutar la alimentación",
+      });
+    }
+  };
+
   const handleDeleteHorario = async (horarioId: number) => {
     if (!selectedAnimal) return;
 
@@ -339,6 +402,52 @@ export default function Dietas() {
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Control de Dietas de Animales</h1>
 
+      {/* Estadísticas de ejecuciones */}
+      {estadisticasEjecuciones && (
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+          <h2 className="text-lg font-semibold mb-2">Estadísticas de Alimentaciones</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{estadisticasEjecuciones.ejecutadasHoy || 0}</div>
+              <div className="text-sm text-gray-600">Ejecutadas Hoy</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{proximasEjecuciones.length}</div>
+              <div className="text-sm text-gray-600">Próximas Ejecuciones</div>
+            </div>
+            <div className="text-center">
+              <Button
+                onClick={fetchEstadisticasEjecuciones}
+                variant="outline"
+                size="sm"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Actualizar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Próximas ejecuciones */}
+      {proximasEjecuciones.length > 0 && (
+        <div className="mb-6 p-4 bg-green-50 rounded-lg">
+          <h2 className="text-lg font-semibold mb-2">Próximas Alimentaciones</h2>
+          <div className="space-y-2">
+            {proximasEjecuciones.slice(0, 5).map((ejecucion: any, index: number) => (
+              <div key={index} className="flex justify-between items-center p-2 bg-white rounded">
+                <div>
+                  <span className="font-medium">{ejecucion.animales?.nombre}</span> - {ejecucion.alimentos?.nombre}
+                  <span className="text-sm text-gray-500 ml-2">
+                    {new Date(ejecucion.proxima_ejecucion).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {animales.map((animal) => (
           <div key={animal.id} className="border rounded-lg p-4">
@@ -364,6 +473,8 @@ export default function Dietas() {
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Frecuencia</TableHead>
                     <TableHead>Observaciones</TableHead>
+                    <TableHead>Última Ejecución</TableHead>
+                    <TableHead>Próxima Ejecución</TableHead>
                     {canModify && <TableHead>Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -375,9 +486,29 @@ export default function Dietas() {
                       <TableCell>{horario.cantidad} {horario.unidad_medida}</TableCell>
                       <TableCell>{horario.frecuencia}</TableCell>
                       <TableCell>{horario.observaciones}</TableCell>
+                      <TableCell>
+                        {horario.ultima_ejecucion
+                          ? new Date(horario.ultima_ejecucion).toLocaleString()
+                          : 'Nunca'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        {horario.proxima_ejecucion
+                          ? new Date(horario.proxima_ejecucion).toLocaleString()
+                          : 'Pendiente'
+                        }
+                      </TableCell>
                       {canModify && (
                         <TableCell>
                           <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEjecutarAlimentacion(horario.id)}
+                              title="Ejecutar alimentación ahora"
+                            >
+                              <Clock className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -416,7 +547,7 @@ export default function Dietas() {
                   ))}
                   {(horarios[animal.id] || []).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={canModify ? 6 : 5} className="text-center text-gray-500">
+                      <TableCell colSpan={canModify ? 8 : 7} className="text-center text-gray-500">
                         No hay horarios de alimentación configurados
                       </TableCell>
                     </TableRow>

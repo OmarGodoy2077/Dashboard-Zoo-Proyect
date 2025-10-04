@@ -1,4 +1,5 @@
 const dietaService = require('../services/dieta.service');
+const dietaScheduler = require('../services/dietaScheduler.service');
 const { logger } = require('../middleware/logger');
 
 // Controlador para módulo de dietas
@@ -150,6 +151,78 @@ const dietaController = {
       res.status(500).json({
         success: false,
         message: 'Error obteniendo estadísticas de dietas',
+        error: error.message
+      });
+    }
+  },
+
+  // ===== SCHEDULER METHODS =====
+
+  // Procesar alimentaciones pendientes manualmente
+  async procesarAlimentaciones(req, res) {
+    try {
+      const resultados = await dietaScheduler.procesarAlimentacionesPendientes();
+
+      res.status(200).json({
+        success: true,
+        message: `Procesadas ${resultados.length} alimentaciones`,
+        data: resultados
+      });
+    } catch (error) {
+      logger.error('Error procesando alimentaciones:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Error procesando alimentaciones',
+        error: error.message
+      });
+    }
+  },
+
+  // Obtener estadísticas de ejecuciones
+  async getEstadisticasEjecuciones(req, res) {
+    try {
+      const estadisticas = await dietaScheduler.getEstadisticasEjecuciones();
+
+      res.status(200).json({
+        success: true,
+        data: estadisticas
+      });
+    } catch (error) {
+      logger.error('Error obteniendo estadísticas de ejecuciones:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Error obteniendo estadísticas de ejecuciones',
+        error: error.message
+      });
+    }
+  },
+
+  // Ejecutar alimentación manualmente
+  async ejecutarAlimentacion(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Obtener el horario
+      const horario = await dietaService.getHorarioById(id);
+      if (!horario) {
+        return res.status(404).json({
+          success: false,
+          message: 'Horario de alimentación no encontrado'
+        });
+      }
+
+      const resultado = await dietaScheduler.ejecutarAlimentacion(horario);
+
+      res.status(200).json({
+        success: true,
+        message: 'Alimentación ejecutada exitosamente',
+        data: resultado
+      });
+    } catch (error) {
+      logger.error('Error ejecutando alimentación:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Error ejecutando alimentación',
         error: error.message
       });
     }

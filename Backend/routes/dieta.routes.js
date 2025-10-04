@@ -14,4 +14,9 @@ router.post('/', auth, authorize('admin', 'veterinario'), dietaController.create
 router.put('/:id', auth, authorize('admin', 'veterinario'), validateId, dietaController.updateHorario);
 router.delete('/:id', auth, authorize('admin', 'veterinario'), validateId, dietaController.deleteHorario);
 
+// Rutas para scheduler/ejecuciones
+router.post('/procesar', auth, authorize('admin', 'veterinario'), dietaController.procesarAlimentaciones);
+router.get('/ejecuciones/estadisticas', auth, authorize('admin', 'veterinario'), dietaController.getEstadisticasEjecuciones);
+router.post('/:id/ejecutar', auth, authorize('admin', 'veterinario'), validateId, dietaController.ejecutarAlimentacion);
+
 module.exports = router;

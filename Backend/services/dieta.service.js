@@ -1,6 +1,7 @@
 const { supabase } = require('../config/database');
 const { logger } = require('../middleware/logger');
-const alimentoService = require('./alimentoService');
+const dietaScheduler = require('./dietaScheduler.service');
+const DateUtils = require('../utils/dateUtils');
 
 class DietaService {
   // Obtener todos los horarios de alimentación con filtros opcionales
@@ -119,7 +120,7 @@ class DietaService {
         throw new Error('Animal no encontrado');
       }
 
-      // Verificar que el alimento existe y tiene stock suficiente
+      // Verificar que el alimento existe y tiene stock suficiente para al menos una alimentación
       const { data: alimentoData, error: alimentoError } = await supabase
         .from('alimentos')
         .select('id, stock_actual, stock_minimo')
@@ -130,29 +131,32 @@ class DietaService {
         throw new Error('Alimento no encontrado');
       }
 
-      // Calcular cantidad a consumir basada en frecuencia
-      let cantidadAConsumir = cantidad;
+      // Calcular cantidad necesaria para una alimentación
+      let cantidadPorAlimentacion = cantidad;
       switch (frecuencia) {
         case 'diario':
-          cantidadAConsumir = cantidad;
+          cantidadPorAlimentacion = cantidad;
           break;
         case 'semanal':
-          cantidadAConsumir = cantidad / 7;
+          cantidadPorAlimentacion = cantidad / 7;
           break;
         case 'cada_dos_dias':
-          cantidadAConsumir = cantidad / 2;
+          cantidadPorAlimentacion = cantidad / 2;
           break;
         case 'cada_tres_dias':
-          cantidadAConsumir = cantidad / 3;
+          cantidadPorAlimentacion = cantidad / 3;
           break;
         default:
-          cantidadAConsumir = cantidad;
+          cantidadPorAlimentacion = cantidad;
       }
 
-      // Verificar stock suficiente
-      if (alimentoData.stock_actual < cantidadAConsumir) {
-        throw new Error(`Stock insuficiente. Disponible: ${alimentoData.stock_actual}, requerido: ${cantidadAConsumir}`);
+      // Verificar stock mínimo para una alimentación
+      if (alimentoData.stock_actual < cantidadPorAlimentacion) {
+        throw new Error(`Stock insuficiente para la primera alimentación. Disponible: ${alimentoData.stock_actual}, requerido: ${cantidadPorAlimentacion}`);
       }
+
+      // Calcular próxima ejecución
+      const proximaEjecucion = DateUtils.calcularProximaEjecucion(frecuencia, hora);
 
       // Crear el horario
       const { data: result, error } = await supabase
@@ -164,26 +168,15 @@ class DietaService {
           frecuencia,
           cantidad,
           observaciones: observaciones || '',
-          activo: true
+          activo: true,
+          proxima_ejecucion: DateUtils.toISOString(proximaEjecucion)
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      // Restar el stock del alimento
-      try {
-        await alimentoService.updateStock(alimento_id, -cantidadAConsumir, 'salida');
-        logger.info('Stock actualizado después de crear horario de alimentación', {
-          alimentoId: alimento_id,
-          cantidadConsumida: cantidadAConsumir,
-          horarioId: result.id
-        });
-      } catch (stockError) {
-        logger.error('Error actualizando stock después de crear horario:', stockError);
-        // Si falla la actualización de stock, podríamos eliminar el horario creado
-        // Pero por ahora solo logueamos el error
-      }
+      logger.info(`Horario de alimentación creado: ${result.id} - Próxima ejecución: ${proximaEjecucion.toISOString()}`);
 
       return result;
     } catch (error) {
@@ -197,18 +190,6 @@ class DietaService {
     try {
       const { animal_id, alimento_id, hora, frecuencia, cantidad, observaciones, activo } = data;
 
-      // Obtener el horario actual para calcular diferencias de stock
-      const { data: horarioActual, error: getError } = await supabase
-        .from('horarios_alimentacion')
-        .select('alimento_id, cantidad, frecuencia')
-        .eq('id', id)
-        .single();
-
-      if (getError) throw getError;
-      if (!horarioActual) {
-        throw new Error('Horario de alimentación no encontrado');
-      }
-
       const updateData = {
         animal_id,
         alimento_id,
@@ -219,6 +200,17 @@ class DietaService {
         activo: activo !== undefined ? activo : true,
         fecha_actualizacion: new Date().toISOString()
       };
+
+      // Si cambió la frecuencia o hora, recalcular próxima ejecución
+      if (frecuencia || hora) {
+        const nuevaFrecuencia = frecuencia || (await supabase.from('horarios_alimentacion').select('frecuencia').eq('id', id).single()).data?.frecuencia;
+        const nuevaHora = hora || (await supabase.from('horarios_alimentacion').select('hora').eq('id', id).single()).data?.hora;
+
+        if (nuevaFrecuencia && nuevaHora) {
+          const proximaEjecucion = DateUtils.calcularProximaEjecucion(nuevaFrecuencia, nuevaHora);
+          updateData.proxima_ejecucion = DateUtils.toISOString(proximaEjecucion);
+        }
+      }
 
       const { data: result, error } = await supabase
         .from('horarios_alimentacion')
@@ -232,62 +224,7 @@ class DietaService {
         throw new Error('Horario de alimentación no encontrado');
       }
 
-      // Calcular y ajustar stock si cambió alimento, cantidad o frecuencia
-      try {
-        let cantidadAAjustar = 0;
-
-        // Si cambió el alimento, devolver al anterior y restar del nuevo
-        if (alimento_id !== horarioActual.alimento_id) {
-          // Devolver al alimento anterior
-          let cantidadAnterior = horarioActual.cantidad;
-          switch (horarioActual.frecuencia) {
-            case 'diario': cantidadAnterior = horarioActual.cantidad; break;
-            case 'semanal': cantidadAnterior = horarioActual.cantidad / 7; break;
-            case 'cada_dos_dias': cantidadAnterior = horarioActual.cantidad / 2; break;
-            case 'cada_tres_dias': cantidadAnterior = horarioActual.cantidad / 3; break;
-          }
-          await alimentoService.updateStock(horarioActual.alimento_id, cantidadAnterior, 'entrada');
-
-          // Restar del nuevo alimento
-          let cantidadNueva = cantidad;
-          switch (frecuencia) {
-            case 'diario': cantidadNueva = cantidad; break;
-            case 'semanal': cantidadNueva = cantidad / 7; break;
-            case 'cada_dos_dias': cantidadNueva = cantidad / 2; break;
-            case 'cada_tres_dias': cantidadNueva = cantidad / 3; break;
-          }
-          await alimentoService.updateStock(alimento_id, -cantidadNueva, 'salida');
-        } else {
-          // Mismo alimento, calcular diferencia
-          let cantidadActual = horarioActual.cantidad;
-          switch (horarioActual.frecuencia) {
-            case 'diario': cantidadActual = horarioActual.cantidad; break;
-            case 'semanal': cantidadActual = horarioActual.cantidad / 7; break;
-            case 'cada_dos_dias': cantidadActual = horarioActual.cantidad / 2; break;
-            case 'cada_tres_dias': cantidadActual = horarioActual.cantidad / 3; break;
-          }
-
-          let cantidadNueva = cantidad;
-          switch (frecuencia) {
-            case 'diario': cantidadNueva = cantidad; break;
-            case 'semanal': cantidadNueva = cantidad / 7; break;
-            case 'cada_dos_dias': cantidadNueva = cantidad / 2; break;
-            case 'cada_tres_dias': cantidadNueva = cantidad / 3; break;
-          }
-
-          cantidadAAjustar = cantidadActual - cantidadNueva;
-          if (cantidadAAjustar !== 0) {
-            await alimentoService.updateStock(alimento_id, cantidadAAjustar, cantidadAAjustar > 0 ? 'entrada' : 'salida');
-          }
-        }
-
-        logger.info('Stock ajustado después de actualizar horario de alimentación', {
-          horarioId: id,
-          cantidadAjustada: cantidadAAjustar
-        });
-      } catch (stockError) {
-        logger.error('Error ajustando stock después de actualizar horario:', stockError);
-      }
+      logger.info(`Horario de alimentación actualizado: ${id}`);
 
       return result;
     } catch (error) {
@@ -299,38 +236,6 @@ class DietaService {
   // Eliminar horario de alimentación (desactivar)
   async deleteHorario(id) {
     try {
-      // Primero obtener el horario para saber cuánto devolver al stock
-      const { data: horario, error: getError } = await supabase
-        .from('horarios_alimentacion')
-        .select('alimento_id, cantidad, frecuencia')
-        .eq('id', id)
-        .single();
-
-      if (getError) throw getError;
-      if (!horario) {
-        throw new Error('Horario de alimentación no encontrado');
-      }
-
-      // Calcular cantidad a devolver basada en frecuencia
-      let cantidadADevolver = horario.cantidad;
-      switch (horario.frecuencia) {
-        case 'diario':
-          cantidadADevolver = horario.cantidad;
-          break;
-        case 'semanal':
-          cantidadADevolver = horario.cantidad / 7;
-          break;
-        case 'cada_dos_dias':
-          cantidadADevolver = horario.cantidad / 2;
-          break;
-        case 'cada_tres_dias':
-          cantidadADevolver = horario.cantidad / 3;
-          break;
-        default:
-          cantidadADevolver = horario.cantidad;
-      }
-
-      // Desactivar el horario
       const { data: result, error } = await supabase
         .from('horarios_alimentacion')
         .update({
@@ -346,17 +251,7 @@ class DietaService {
         throw new Error('Horario de alimentación no encontrado');
       }
 
-      // Devolver el stock del alimento
-      try {
-        await alimentoService.updateStock(horario.alimento_id, cantidadADevolver, 'entrada');
-        logger.info('Stock devuelto después de eliminar horario de alimentación', {
-          alimentoId: horario.alimento_id,
-          cantidadDevuelta: cantidadADevolver,
-          horarioId: id
-        });
-      } catch (stockError) {
-        logger.error('Error devolviendo stock después de eliminar horario:', stockError);
-      }
+      logger.info(`Horario de alimentación desactivado: ${id}`);
 
       return result;
     } catch (error) {
